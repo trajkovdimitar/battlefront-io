@@ -259,6 +259,49 @@ export class TerrainLayer3D implements Layer3D {
   }
 
   /**
+   * Check if a tile is on a border (has a neighbor owned by a different player)
+   */
+  private isBorderTile(
+    gameX: number,
+    gameY: number,
+    currentOwner: string | null,
+  ): boolean {
+    const width = this.game.width();
+    const height = this.game.height();
+
+    // Check 4-connected neighbors
+    const neighbors = [
+      [gameX - 1, gameY],
+      [gameX + 1, gameY],
+      [gameX, gameY - 1],
+      [gameX, gameY + 1],
+    ];
+
+    for (const [nx, ny] of neighbors) {
+      if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+
+      const neighborRef = this.game.ref(nx, ny);
+      const neighborHasOwner = this.game.hasOwner(neighborRef);
+
+      if (currentOwner === null) {
+        // Current tile is unowned - no border against other unowned or owned
+        continue;
+      }
+
+      if (neighborHasOwner) {
+        const neighborOwner = (this.game.owner(neighborRef) as PlayerView).id();
+        if (neighborOwner !== currentOwner) {
+          // Different owner - this is a border
+          return true;
+        }
+      }
+      // Don't draw border between owned and unowned
+    }
+
+    return false;
+  }
+
+  /**
    * Get the base terrain color for a tile
    */
   private getTerrainColor(ref: number): Color3 {
@@ -293,10 +336,30 @@ export class TerrainLayer3D implements Layer3D {
     if (!this.terrainMesh || !this.scene || !this.cachedColors) return;
 
     const width = this.game.width();
+    const height = this.game.height();
 
-    // Update only the changed tiles in the cached array
+    // Collect tiles that need updating (changed tiles + their neighbors for border recalc)
+    const tilesToUpdate = new Set<number>();
     for (const tileRef of tiles) {
-      // Convert tileRef to x,y coordinates
+      tilesToUpdate.add(tileRef);
+      // Also update neighbors since border status may have changed
+      const gameX = this.game.x(tileRef);
+      const gameY = this.game.y(tileRef);
+      const neighbors = [
+        [gameX - 1, gameY],
+        [gameX + 1, gameY],
+        [gameX, gameY - 1],
+        [gameX, gameY + 1],
+      ];
+      for (const [nx, ny] of neighbors) {
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+          tilesToUpdate.add(this.game.ref(nx, ny));
+        }
+      }
+    }
+
+    // Update the collected tiles
+    for (const tileRef of tilesToUpdate) {
       const gameX = this.game.x(tileRef);
       const gameY = this.game.y(tileRef);
 
@@ -306,9 +369,11 @@ export class TerrainLayer3D implements Layer3D {
 
       // Get the color for this tile
       let r: number, g: number, b: number;
+      let ownerId: string | null = null;
 
       if (this.game.hasOwner(tileRef)) {
         const owner = this.game.owner(tileRef) as PlayerView;
+        ownerId = owner.id();
         const colord = owner.territoryColor(tileRef);
         const playerColor = colord.rgba;
         r = playerColor.r / 255;
@@ -319,6 +384,14 @@ export class TerrainLayer3D implements Layer3D {
         r = color.r;
         g = color.g;
         b = color.b;
+      }
+
+      // Darken if on border between different owners
+      if (ownerId !== null && this.isBorderTile(gameX, gameY, ownerId)) {
+        const borderDarken = 0.4; // Darken by 60%
+        r *= borderDarken;
+        g *= borderDarken;
+        b *= borderDarken;
       }
 
       // Update the color in the cached array
@@ -354,23 +427,37 @@ export class TerrainLayer3D implements Layer3D {
       for (let gameX = 0; gameX < width; gameX++) {
         const ref = this.game.ref(gameX, gameY);
 
+        let r: number, g: number, b: number;
+        let ownerId: string | null = null;
+
         // Check if owned by a player (same logic as 2D TerritoryLayer)
         if (this.game.hasOwner(ref)) {
           const owner = this.game.owner(ref) as PlayerView;
+          ownerId = owner.id();
           const colord = owner.territoryColor(ref);
           const playerColor = colord.rgba;
-          this.cachedColors[idx++] = playerColor.r / 255;
-          this.cachedColors[idx++] = playerColor.g / 255;
-          this.cachedColors[idx++] = playerColor.b / 255;
-          this.cachedColors[idx++] = 1;
-          continue;
+          r = playerColor.r / 255;
+          g = playerColor.g / 255;
+          b = playerColor.b / 255;
+        } else {
+          // Not owned - use terrain color
+          const color = this.getTerrainColor(ref);
+          r = color.r;
+          g = color.g;
+          b = color.b;
         }
 
-        // Not owned - use terrain color
-        const color = this.getTerrainColor(ref);
-        this.cachedColors[idx++] = color.r;
-        this.cachedColors[idx++] = color.g;
-        this.cachedColors[idx++] = color.b;
+        // Darken if on border between different owners
+        if (ownerId !== null && this.isBorderTile(gameX, gameY, ownerId)) {
+          const borderDarken = 0.4; // Darken by 60%
+          r *= borderDarken;
+          g *= borderDarken;
+          b *= borderDarken;
+        }
+
+        this.cachedColors[idx++] = r;
+        this.cachedColors[idx++] = g;
+        this.cachedColors[idx++] = b;
         this.cachedColors[idx++] = 1;
       }
     }
