@@ -20,8 +20,8 @@ import {
   renderTroops,
   translateText,
 } from "../../Utils";
+import { ITransformHandler } from "../ITransformHandler";
 import { getFirstPlacePlayer, getPlayerIcons } from "../PlayerIcons";
-import { TransformHandler } from "../TransformHandler";
 import { Layer } from "./Layer";
 import { CloseRadialMenuEvent } from "./RadialMenu";
 import allianceIcon from "/images/AllianceIcon.svg?url";
@@ -62,7 +62,7 @@ export class PlayerInfoOverlay extends LitElement implements Layer {
   public eventBus!: EventBus;
 
   @property({ type: Object })
-  public transform!: TransformHandler;
+  public transform!: ITransformHandler;
 
   @state()
   private player: PlayerView | null = null;

@@ -4,7 +4,7 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 import { Scene } from "@babylonjs/core/scene";
 import { GameUpdateViewData } from "../../../core/game/GameUpdates";
-import { GameView } from "../../../core/game/GameView";
+import { GameView, PlayerView } from "../../../core/game/GameView";
 import { Layer3D } from "./Layer3D";
 
 /**
@@ -39,7 +39,11 @@ export class TerrainLayer3D implements Layer3D {
 
   // Cached terrain data
   private heightmap: Float32Array | null = null;
-  private colorData: Float32Array | null = null;
+  private cachedColors: Float32Array | null = null;
+
+  // Track if we need initial color update (game state may not be ready at init time)
+  private needsInitialColorUpdate: boolean = true;
+  private tickCount: number = 0;
 
   constructor(
     private game: GameView,
@@ -52,6 +56,7 @@ export class TerrainLayer3D implements Layer3D {
     this.scene = scene;
     this.createTerrainMesh();
     this.createWaterMesh();
+    // Territory colors will be updated on first tick when game state is ready
   }
 
   /**
@@ -149,21 +154,30 @@ export class TerrainLayer3D implements Layer3D {
     const positions: number[] = [];
     const indices: number[] = [];
     const normals: number[] = [];
-    const colors: number[] = [];
+
+    // Initialize cached colors array
+    const totalVertices = width * height;
+    this.cachedColors = new Float32Array(totalVertices * 4);
 
     // Generate vertices
-    for (let z = 0; z < height; z++) {
-      for (let x = 0; x < width; x++) {
-        const idx = z * width + x;
-        const y = this.heightmap[idx];
+    // Note: We invert Z to match 2D coordinate system where Y increases downward
+    let colorIdx = 0;
+    for (let gameY = 0; gameY < height; gameY++) {
+      for (let gameX = 0; gameX < width; gameX++) {
+        const idx = gameY * width + gameX;
+        const elevation = this.heightmap[idx];
 
-        // Position (x, y, z) - note: game Y becomes 3D Z
-        positions.push(x, y, z);
+        // Position: game X -> 3D X, game Y -> 3D Z (inverted for correct orientation)
+        const z3d = height - 1 - gameY;
+        positions.push(gameX, elevation, z3d);
 
-        // Get terrain color
-        const ref = this.game.ref(x, z);
+        // Get terrain color and store in cached array
+        const ref = this.game.ref(gameX, gameY);
         const color = this.getTerrainColor(ref);
-        colors.push(color.r, color.g, color.b, 1);
+        this.cachedColors[colorIdx++] = color.r;
+        this.cachedColors[colorIdx++] = color.g;
+        this.cachedColors[colorIdx++] = color.b;
+        this.cachedColors[colorIdx++] = 1;
       }
     }
 
@@ -191,18 +205,24 @@ export class TerrainLayer3D implements Layer3D {
     vertexData.positions = positions;
     vertexData.indices = indices;
     vertexData.normals = normals;
-    vertexData.colors = colors;
-    vertexData.applyToMesh(this.terrainMesh);
+    vertexData.colors = this.cachedColors;
+    // Apply with updatable=true for colors so we can update them efficiently
+    vertexData.applyToMesh(this.terrainMesh, true);
 
     // Create material with vertex colors
     this.terrainMaterial = new StandardMaterial("terrainMaterial", this.scene);
+    // White diffuse to let vertex colors show through
     this.terrainMaterial.diffuseColor = new Color3(1, 1, 1);
-    this.terrainMaterial.specularColor = new Color3(0.1, 0.1, 0.1);
-    this.terrainMaterial.emissiveColor = new Color3(0.1, 0.1, 0.1);
-    this.terrainMesh.material = this.terrainMaterial;
+    // No specular - flat look like 2D
+    this.terrainMaterial.specularColor = new Color3(0, 0, 0);
+    // Small emissive to ensure colors are visible even in shadow
+    this.terrainMaterial.emissiveColor = new Color3(0.3, 0.3, 0.3);
+    // Disable backface culling to see terrain from all angles
+    this.terrainMaterial.backFaceCulling = false;
 
-    // Enable vertex colors (must be done after material is assigned)
+    // Enable vertex colors BEFORE assigning material
     this.terrainMesh.useVertexColors = true;
+    this.terrainMesh.material = this.terrainMaterial;
   }
 
   /**
@@ -214,7 +234,8 @@ export class TerrainLayer3D implements Layer3D {
     const width = this.game.width();
     const height = this.game.height();
 
-    // Create simple quad for water
+    // Create simple quad for water at y=0
+    // Corners: (0,0,0), (width,0,0), (width,0,height), (0,0,height)
     const positions = [0, 0, 0, width, 0, 0, width, 0, height, 0, 0, height];
     const indices = [0, 2, 1, 0, 3, 2];
     const normals: number[] = [];
@@ -228,11 +249,12 @@ export class TerrainLayer3D implements Layer3D {
     vertexData.normals = normals;
     vertexData.applyToMesh(this.waterMesh);
 
-    // Water material
+    // Water material - brighter blue to match game
     this.waterMaterial = new StandardMaterial("waterMaterial", this.scene);
-    this.waterMaterial.diffuseColor = new Color3(0.1, 0.3, 0.6);
-    this.waterMaterial.specularColor = new Color3(0.3, 0.3, 0.4);
-    this.waterMaterial.alpha = 0.8;
+    this.waterMaterial.diffuseColor = new Color3(0.2, 0.5, 0.8);
+    this.waterMaterial.specularColor = new Color3(0.4, 0.4, 0.5);
+    this.waterMaterial.emissiveColor = new Color3(0.1, 0.2, 0.3);
+    this.waterMaterial.alpha = 0.85;
     this.waterMesh.material = this.waterMaterial;
   }
 
@@ -264,53 +286,113 @@ export class TerrainLayer3D implements Layer3D {
   }
 
   /**
-   * Update territory colors based on ownership
-   * Called when territories change hands
+   * Update colors for specific tiles only (incremental update)
+   * Much faster than updating the entire terrain
+   */
+  private updateTileColors(tiles: number[]): void {
+    if (!this.terrainMesh || !this.scene || !this.cachedColors) return;
+
+    const width = this.game.width();
+
+    // Update only the changed tiles in the cached array
+    for (const tileRef of tiles) {
+      // Convert tileRef to x,y coordinates
+      const gameX = this.game.x(tileRef);
+      const gameY = this.game.y(tileRef);
+
+      // Calculate vertex index (must match createTerrainMesh vertex order)
+      const vertexIndex = gameY * width + gameX;
+      const colorIndex = vertexIndex * 4; // 4 components per color (RGBA)
+
+      // Get the color for this tile
+      let r: number, g: number, b: number;
+
+      if (this.game.hasOwner(tileRef)) {
+        const owner = this.game.owner(tileRef) as PlayerView;
+        const colord = owner.territoryColor(tileRef);
+        const playerColor = colord.rgba;
+        r = playerColor.r / 255;
+        g = playerColor.g / 255;
+        b = playerColor.b / 255;
+      } else {
+        const color = this.getTerrainColor(tileRef);
+        r = color.r;
+        g = color.g;
+        b = color.b;
+      }
+
+      // Update the color in the cached array
+      this.cachedColors[colorIndex] = r;
+      this.cachedColors[colorIndex + 1] = g;
+      this.cachedColors[colorIndex + 2] = b;
+      // Alpha stays at 1
+    }
+
+    // Apply updated colors - use updateVerticesData for partial updates
+    this.terrainMesh.updateVerticesData("color", this.cachedColors, true);
+  }
+
+  /**
+   * Update territory colors based on ownership (full rebuild)
+   * Called on initial load
    */
   updateTerritoryColors(): void {
     if (!this.terrainMesh || !this.scene) return;
 
     const width = this.game.width();
     const height = this.game.height();
-    const colors: number[] = [];
+    const totalVertices = width * height;
 
-    for (let z = 0; z < height; z++) {
-      for (let x = 0; x < width; x++) {
-        const ref = this.game.ref(x, z);
+    // Initialize or reuse cached colors array
+    if (!this.cachedColors || this.cachedColors.length !== totalVertices * 4) {
+      this.cachedColors = new Float32Array(totalVertices * 4);
+    }
 
-        // Check if owned by a player
+    // Must match the vertex order in createTerrainMesh
+    let idx = 0;
+    for (let gameY = 0; gameY < height; gameY++) {
+      for (let gameX = 0; gameX < width; gameX++) {
+        const ref = this.game.ref(gameX, gameY);
+
+        // Check if owned by a player (same logic as 2D TerritoryLayer)
         if (this.game.hasOwner(ref)) {
-          const owner = this.game.owner(ref);
-          // owner() returns PlayerView | TerraNullius
-          if (owner && "territoryColor" in owner) {
-            const colord = owner.territoryColor(ref);
-            const playerColor = colord.rgba;
-            colors.push(
-              playerColor.r / 255,
-              playerColor.g / 255,
-              playerColor.b / 255,
-              1,
-            );
-            continue;
-          }
+          const owner = this.game.owner(ref) as PlayerView;
+          const colord = owner.territoryColor(ref);
+          const playerColor = colord.rgba;
+          this.cachedColors[idx++] = playerColor.r / 255;
+          this.cachedColors[idx++] = playerColor.g / 255;
+          this.cachedColors[idx++] = playerColor.b / 255;
+          this.cachedColors[idx++] = 1;
+          continue;
         }
 
         // Not owned - use terrain color
         const color = this.getTerrainColor(ref);
-        colors.push(color.r, color.g, color.b, 1);
+        this.cachedColors[idx++] = color.r;
+        this.cachedColors[idx++] = color.g;
+        this.cachedColors[idx++] = color.b;
+        this.cachedColors[idx++] = 1;
       }
     }
 
     // Update mesh colors
-    this.terrainMesh.setVerticesData("color", colors);
+    this.terrainMesh.updateVerticesData("color", this.cachedColors, true);
   }
 
   tick(updates: GameUpdateViewData | null): void {
-    // Check for tile updates that affect territory ownership
-    if (updates?.packedTileUpdates && updates.packedTileUpdates.length > 0) {
-      // Territory changed - update colors
-      // For now, update all colors (optimization: only update changed tiles)
+    this.tickCount++;
+
+    // Do initial color update after a few ticks (game state may not be ready immediately)
+    if (this.needsInitialColorUpdate && this.tickCount >= 3) {
       this.updateTerritoryColors();
+      this.needsInitialColorUpdate = false;
+      return;
+    }
+
+    // Incrementally update only the tiles that changed (like 2D renderer)
+    const updatedTiles = this.game.recentlyUpdatedTiles();
+    if (updatedTiles.length > 0) {
+      this.updateTileColors(updatedTiles);
     }
   }
 

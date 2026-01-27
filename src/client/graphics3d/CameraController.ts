@@ -2,6 +2,9 @@ import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Scene } from "@babylonjs/core/scene";
 
+// Import Ray as side effect - required for createPickingRay to work
+import "@babylonjs/core/Culling/ray";
+
 export interface CameraConfig {
   /** Initial distance from target */
   initialRadius: number;

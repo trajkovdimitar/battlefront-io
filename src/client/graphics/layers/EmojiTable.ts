@@ -7,12 +7,12 @@ import { TerraNulliusImpl } from "../../../core/game/TerraNulliusImpl";
 import { Emoji, flattenedEmojiTable } from "../../../core/Util";
 import { CloseViewEvent, ShowEmojiMenuEvent } from "../../InputHandler";
 import { SendEmojiIntentEvent } from "../../Transport";
-import { TransformHandler } from "../TransformHandler";
+import { ITransformHandler } from "../ITransformHandler";
 
 @customElement("emoji-table")
 export class EmojiTable extends LitElement {
   @state() public isVisible = false;
-  public transformHandler: TransformHandler;
+  public transformHandler: ITransformHandler;
   public game: GameView;
 
   initEventBus(eventBus: EventBus) {

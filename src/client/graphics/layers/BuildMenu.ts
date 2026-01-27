@@ -21,7 +21,7 @@ import {
   SendUpgradeStructureIntentEvent,
 } from "../../Transport";
 import { renderNumber } from "../../Utils";
-import { TransformHandler } from "../TransformHandler";
+import { ITransformHandler } from "../ITransformHandler";
 import { UIState } from "../UIState";
 import { Layer } from "./Layer";
 import warshipIcon from "/images/BattleshipIconWhite.svg?url";
@@ -130,7 +130,7 @@ export class BuildMenu extends LitElement implements Layer {
   private clickedTile: TileRef;
   public playerActions: PlayerActions | null;
   private filteredBuildTable: BuildItemDisplay[][] = buildTable;
-  public transformHandler: TransformHandler;
+  public transformHandler: ITransformHandler;
 
   init() {
     this.eventBus.on(ShowBuildMenuEvent, (e) => {

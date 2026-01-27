@@ -2,13 +2,13 @@ import { LitElement, html } from "lit";
 import { customElement } from "lit/decorators.js";
 import { GameMode, Team } from "../../../core/game/Game";
 import { GameView } from "../../../core/game/GameView";
-import { TransformHandler } from "../TransformHandler";
+import { ITransformHandler } from "../ITransformHandler";
 import { Layer } from "./Layer";
 
 @customElement("spawn-timer")
 export class SpawnTimer extends LitElement implements Layer {
   public game: GameView;
-  public transformHandler: TransformHandler;
+  public transformHandler: ITransformHandler;
 
   private ratios = [0];
   private colors = ["rgba(0, 128, 255, 0.7)", "rgba(0, 0, 0, 0.5)"];

@@ -2,6 +2,7 @@ import { EventBus } from "../../core/EventBus";
 import { Cell } from "../../core/game/Game";
 import { GameView } from "../../core/game/GameView";
 import { CenterCameraEvent, DragEvent, ZoomEvent } from "../InputHandler";
+import { ITransformHandler } from "./ITransformHandler";
 import {
   GoToPlayerEvent,
   GoToPositionEvent,
@@ -12,7 +13,7 @@ export const GOTO_INTERVAL_MS = 16;
 export const CAMERA_MAX_SPEED = 15;
 export const CAMERA_SMOOTHING = 0.03;
 
-export class TransformHandler {
+export class TransformHandler implements ITransformHandler {
   public scale: number = 1.8;
   private _boundingRect: DOMRect;
   private offsetX: number = -350;
