@@ -175,15 +175,17 @@ Map game tiles to world units: 1 tile = 1 world unit (adjustable)
 
 - [x] Explosion particle systems (mini, SAM, nuke, hydrogen)
 - [x] SAM intercept effects
-- [ ] Ship wakes (future)
+- [x] Ship wakes
 - [ ] Smoke/fire for buildings (future)
 - [ ] Conquest animation (future)
 
-### Milestone 7: Polish (Target: Week 18)
+### Milestone 7: Polish (Target: Week 18) 🚧
 
+- [x] Selection highlighting (glowing ring)
+- [x] Territory borders (dark lines)
 - [ ] Performance optimization
 - [ ] LOD system for distant objects
-- [ ] Visual polish pass
+- [ ] Building smoke/fire effects
 - [ ] Edge case handling
 
 ---
@@ -286,6 +288,26 @@ _Updates added as work progresses_
 - Building smoke/fire effects
 - Selection highlighting
 - LOD system for performance
+
+### Session 5: Polish Features (Milestone 7)
+
+- Added warship selection highlighting with glowing torus ring
+- Selection ring has pulsating animation and follows selected unit
+- Added ship wake particle effects (foam trails behind moving ships)
+- Added territory border lines between different owners
+- UnitLayer3D now handles click/touch selection and movement commands
+
+**Completed polish items:**
+
+- ✅ Selection highlighting (glowing ring with pulsation)
+- ✅ Ship wakes (foam particle trails)
+- ✅ Territory borders (dark lines between owners)
+
+**Remaining polish items:**
+
+- Building smoke/fire effects
+- LOD system for performance
+- Conquest animation
 
 **To test the 3D renderer:**
 
