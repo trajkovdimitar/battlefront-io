@@ -371,19 +371,24 @@ export class TerrainLayer3D implements Layer3D {
       let r: number, g: number, b: number;
       let ownerId: string | null = null;
 
+      // Always get base terrain color first
+      const terrainColor = this.getTerrainColor(tileRef);
+
       if (this.game.hasOwner(tileRef)) {
         const owner = this.game.owner(tileRef) as PlayerView;
         ownerId = owner.id();
         const colord = owner.territoryColor(tileRef);
         const playerColor = colord.rgba;
-        r = playerColor.r / 255;
-        g = playerColor.g / 255;
-        b = playerColor.b / 255;
+
+        // Blend territory color with terrain color using alpha=150/255 (same as 2D)
+        const alpha = 150 / 255;
+        r = terrainColor.r * (1 - alpha) + (playerColor.r / 255) * alpha;
+        g = terrainColor.g * (1 - alpha) + (playerColor.g / 255) * alpha;
+        b = terrainColor.b * (1 - alpha) + (playerColor.b / 255) * alpha;
       } else {
-        const color = this.getTerrainColor(tileRef);
-        r = color.r;
-        g = color.g;
-        b = color.b;
+        r = terrainColor.r;
+        g = terrainColor.g;
+        b = terrainColor.b;
       }
 
       // Darken if on border between different owners
@@ -430,21 +435,26 @@ export class TerrainLayer3D implements Layer3D {
         let r: number, g: number, b: number;
         let ownerId: string | null = null;
 
+        // Always get base terrain color first
+        const terrainColor = this.getTerrainColor(ref);
+
         // Check if owned by a player (same logic as 2D TerritoryLayer)
         if (this.game.hasOwner(ref)) {
           const owner = this.game.owner(ref) as PlayerView;
           ownerId = owner.id();
           const colord = owner.territoryColor(ref);
           const playerColor = colord.rgba;
-          r = playerColor.r / 255;
-          g = playerColor.g / 255;
-          b = playerColor.b / 255;
+
+          // Blend territory color with terrain color using alpha=150/255 (same as 2D)
+          const alpha = 150 / 255;
+          r = terrainColor.r * (1 - alpha) + (playerColor.r / 255) * alpha;
+          g = terrainColor.g * (1 - alpha) + (playerColor.g / 255) * alpha;
+          b = terrainColor.b * (1 - alpha) + (playerColor.b / 255) * alpha;
         } else {
           // Not owned - use terrain color
-          const color = this.getTerrainColor(ref);
-          r = color.r;
-          g = color.g;
-          b = color.b;
+          r = terrainColor.r;
+          g = terrainColor.g;
+          b = terrainColor.b;
         }
 
         // Darken if on border between different owners
