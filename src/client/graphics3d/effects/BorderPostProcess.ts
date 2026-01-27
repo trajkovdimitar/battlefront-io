@@ -28,6 +28,16 @@ Effect.ShadersStore["borderFragmentShader"] = `
   uniform float borderWidth;
   uniform float borderAlpha;
 
+  // Check if two ownership values represent different owners (both must be owned)
+  float differentOwners(float a, float b) {
+    // Both must be owned (> 0.01) and different from each other
+    float aOwned = step(0.01, a);
+    float bOwned = step(0.01, b);
+    float bothOwned = aOwned * bOwned;
+    float different = step(0.01, abs(a - b));
+    return bothOwned * different;
+  }
+
   void main(void) {
     vec4 sceneColor = texture2D(textureSampler, vUV);
 
@@ -46,25 +56,20 @@ Effect.ShadersStore["borderFragmentShader"] = `
     float bottomRight = texture2D(ownershipSampler, vUV + vec2(texelSize.x, -texelSize.y)).r;
     float bottomLeft = texture2D(ownershipSampler, vUV + vec2(-texelSize.x, -texelSize.y)).r;
 
-    // Calculate difference from neighbors (edge detection)
-    float diff = 0.0;
-    diff += abs(current - right);
-    diff += abs(current - left);
-    diff += abs(current - up);
-    diff += abs(current - down);
+    // Only detect edges where TWO DIFFERENT OWNERS meet (not owned vs unowned)
+    float edge = 0.0;
+    edge += differentOwners(current, right);
+    edge += differentOwners(current, left);
+    edge += differentOwners(current, up);
+    edge += differentOwners(current, down);
     // Diagonals with less weight
-    diff += abs(current - topRight) * 0.5;
-    diff += abs(current - topLeft) * 0.5;
-    diff += abs(current - bottomRight) * 0.5;
-    diff += abs(current - bottomLeft) * 0.5;
+    edge += differentOwners(current, topRight) * 0.5;
+    edge += differentOwners(current, topLeft) * 0.5;
+    edge += differentOwners(current, bottomRight) * 0.5;
+    edge += differentOwners(current, bottomLeft) * 0.5;
 
-    // Normalize and apply threshold with smoothstep for anti-aliasing
-    float edge = smoothstep(0.01, 0.1, diff);
-
-    // Only draw borders where there's owned territory (current > 0)
-    // This prevents borders at the edge of unowned territory
-    float hasOwner = step(0.01, current);
-    edge *= hasOwner;
+    // Normalize and apply smoothstep for anti-aliasing
+    edge = smoothstep(0.0, 1.0, edge);
 
     // Blend border color with scene
     vec3 finalColor = mix(sceneColor.rgb, borderColor, edge * borderAlpha);
