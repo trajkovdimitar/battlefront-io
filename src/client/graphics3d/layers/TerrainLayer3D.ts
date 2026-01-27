@@ -1,8 +1,5 @@
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { CreateLineSystem } from "@babylonjs/core/Meshes/Builders/linesBuilder";
-import { LinesMesh } from "@babylonjs/core/Meshes/linesMesh";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 import { Scene } from "@babylonjs/core/scene";
@@ -40,11 +37,6 @@ export class TerrainLayer3D implements Layer3D {
   private waterMaterial: StandardMaterial | null = null;
   private config: TerrainConfig;
 
-  // Double-buffered border meshes for smooth updates
-  private borderMeshA: LinesMesh | null = null;
-  private borderMeshB: LinesMesh | null = null;
-  private activeBorderIndex: 0 | 1 = 0; // Which mesh is currently visible
-
   // Cached terrain data
   private heightmap: Float32Array | null = null;
   private cachedColors: Float32Array | null = null;
@@ -52,9 +44,6 @@ export class TerrainLayer3D implements Layer3D {
   // Track if we need initial color update (game state may not be ready at init time)
   private needsInitialColorUpdate: boolean = true;
   private tickCount: number = 0;
-
-  // Track if borders need update
-  private bordersDirty: boolean = true;
 
   constructor(
     private game: GameView,
@@ -270,130 +259,6 @@ export class TerrainLayer3D implements Layer3D {
   }
 
   /**
-   * Build border line data from current ownership state
-   */
-  private buildBorderLines(): Vector3[][] {
-    if (!this.heightmap) return [];
-
-    const width = this.game.width();
-    const height = this.game.height();
-    const lines: Vector3[][] = [];
-
-    // Scan all tiles and find edges between different owners
-    for (let gameY = 0; gameY < height; gameY++) {
-      for (let gameX = 0; gameX < width; gameX++) {
-        const ref = this.game.ref(gameX, gameY);
-        if (!this.game.hasOwner(ref)) continue;
-
-        const owner = this.game.owner(ref);
-        const idx = gameY * width + gameX;
-        const elevation = this.heightmap[idx];
-        const z3d = height - 1 - gameY;
-
-        // Check right neighbor
-        if (gameX < width - 1) {
-          const rightRef = this.game.ref(gameX + 1, gameY);
-          const rightOwner = this.game.hasOwner(rightRef)
-            ? this.game.owner(rightRef)
-            : null;
-
-          if (owner !== rightOwner) {
-            const rightIdx = gameY * width + (gameX + 1);
-            const rightElevation = this.heightmap[rightIdx];
-            const borderHeight = Math.max(elevation, rightElevation) + 0.5;
-
-            // Vertical line at x + 0.5
-            lines.push([
-              new Vector3(gameX + 0.5, borderHeight, z3d - 0.5),
-              new Vector3(gameX + 0.5, borderHeight, z3d + 0.5),
-            ]);
-          }
-        }
-
-        // Check bottom neighbor (which is +Y in game coords, -Z in 3D)
-        if (gameY < height - 1) {
-          const bottomRef = this.game.ref(gameX, gameY + 1);
-          const bottomOwner = this.game.hasOwner(bottomRef)
-            ? this.game.owner(bottomRef)
-            : null;
-
-          if (owner !== bottomOwner) {
-            const bottomIdx = (gameY + 1) * width + gameX;
-            const bottomElevation = this.heightmap[bottomIdx];
-            const borderHeight = Math.max(elevation, bottomElevation) + 0.5;
-
-            // Horizontal line at z3d - 0.5 (between this tile and bottom)
-            lines.push([
-              new Vector3(gameX - 0.5, borderHeight, z3d - 0.5),
-              new Vector3(gameX + 0.5, borderHeight, z3d - 0.5),
-            ]);
-          }
-        }
-      }
-    }
-
-    return lines;
-  }
-
-  /**
-   * Update territory border lines using double buffering.
-   * Builds new borders into the inactive mesh, then swaps visibility atomically.
-   * This eliminates visual flickering during updates.
-   */
-  private updateBorders(): void {
-    if (!this.scene) return;
-
-    const lines = this.buildBorderLines();
-
-    // Determine which mesh to build into (the inactive one)
-    const inactiveIndex = this.activeBorderIndex === 0 ? 1 : 0;
-    const inactiveMesh =
-      inactiveIndex === 0 ? this.borderMeshA : this.borderMeshB;
-
-    // Dispose the inactive mesh before rebuilding
-    inactiveMesh?.dispose();
-
-    if (lines.length === 0) {
-      // No borders - hide both meshes
-      if (this.borderMeshA) this.borderMeshA.isVisible = false;
-      if (this.borderMeshB) this.borderMeshB.isVisible = false;
-      return;
-    }
-
-    // Create new line mesh into the inactive slot
-    const newMesh = CreateLineSystem(
-      `borders_${inactiveIndex}`,
-      {
-        lines,
-        updatable: false,
-      },
-      this.scene,
-    );
-
-    // Style the new mesh
-    newMesh.color = new Color3(0.1, 0.1, 0.1);
-    newMesh.alpha = 0.8;
-    newMesh.isVisible = true;
-
-    // Store in the inactive slot
-    if (inactiveIndex === 0) {
-      this.borderMeshA = newMesh;
-    } else {
-      this.borderMeshB = newMesh;
-    }
-
-    // Hide the old active mesh
-    const oldActiveMesh =
-      this.activeBorderIndex === 0 ? this.borderMeshA : this.borderMeshB;
-    if (oldActiveMesh && oldActiveMesh !== newMesh) {
-      oldActiveMesh.isVisible = false;
-    }
-
-    // Swap active index
-    this.activeBorderIndex = inactiveIndex as 0 | 1;
-  }
-
-  /**
    * Get the base terrain color for a tile
    */
   private getTerrainColor(ref: number): Color3 {
@@ -520,9 +385,7 @@ export class TerrainLayer3D implements Layer3D {
     // Do initial color update after a few ticks (game state may not be ready immediately)
     if (this.needsInitialColorUpdate && this.tickCount >= 3) {
       this.updateTerritoryColors();
-      this.updateBorders();
       this.needsInitialColorUpdate = false;
-      this.bordersDirty = false;
       return;
     }
 
@@ -530,14 +393,6 @@ export class TerrainLayer3D implements Layer3D {
     const updatedTiles = this.game.recentlyUpdatedTiles();
     if (updatedTiles.length > 0) {
       this.updateTileColors(updatedTiles);
-      // Mark borders as needing update (ownership may have changed)
-      this.bordersDirty = true;
-    }
-
-    // Rebuild borders periodically when dirty (not every tick for performance)
-    if (this.bordersDirty && this.tickCount % 10 === 0) {
-      this.updateBorders();
-      this.bordersDirty = false;
     }
   }
 
@@ -548,8 +403,6 @@ export class TerrainLayer3D implements Layer3D {
   dispose(): void {
     this.terrainMesh?.dispose();
     this.waterMesh?.dispose();
-    this.borderMeshA?.dispose();
-    this.borderMeshB?.dispose();
     this.terrainMaterial?.dispose();
     this.waterMaterial?.dispose();
   }

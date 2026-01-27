@@ -41,6 +41,7 @@ import { WinModal } from "../graphics/layers/WinModal";
 import { BuildHandler3D } from "./BuildHandler3D";
 import { CameraController } from "./CameraController";
 import { TransformHandler3D } from "./TransformHandler3D";
+import { BorderPostProcess } from "./effects/BorderPostProcess";
 import { FxLayer3D } from "./layers/FxLayer3D";
 import { Layer3D } from "./layers/Layer3D";
 import { StructureLayer3D } from "./layers/StructureLayer3D";
@@ -321,6 +322,9 @@ export class BabylonRenderer {
   private uiLayers: Layer[] = [];
   private lastFrameTime: number = 0;
 
+  // Border rendering post-process
+  private borderPostProcess: BorderPostProcess | null = null;
+
   // Compatibility properties for ClientGameRunner
   public uiState: UIState;
   public transformHandler: TransformHandler3D;
@@ -432,6 +436,15 @@ export class BabylonRenderer {
     // Center camera on map
     this.cameraController.centerOnMap();
 
+    // Create border post-process effect (after camera is ready)
+    this.borderPostProcess = new BorderPostProcess(
+      this.scene,
+      this.cameraController.getCamera(),
+      this.game,
+    );
+    // Initial ownership update
+    this.borderPostProcess.updateOwnership();
+
     // Start render loop
     this.lastFrameTime = performance.now();
     this.engine.runRenderLoop(() => this.renderLoop());
@@ -482,6 +495,13 @@ export class BabylonRenderer {
     for (const layer of this.uiLayers) {
       layer.tick?.();
     }
+
+    // Update border post-process if territory changed
+    const updatedTiles = this.game.recentlyUpdatedTiles();
+    if (updatedTiles.length > 0 && this.borderPostProcess) {
+      this.borderPostProcess.markDirty();
+      this.borderPostProcess.tick();
+    }
   }
 
   /**
@@ -523,6 +543,7 @@ export class BabylonRenderer {
     for (const layer of this.layers) {
       layer.dispose();
     }
+    this.borderPostProcess?.dispose();
     this.cameraController.dispose();
     this.scene.dispose();
     this.engine.dispose();
