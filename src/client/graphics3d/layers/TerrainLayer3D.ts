@@ -388,7 +388,7 @@ export class TerrainLayer3D implements Layer3D {
 
       // Darken if on border between different owners
       if (ownerId !== null && this.isBorderTile(gameX, gameY, ownerId)) {
-        const borderDarken = 0.7; // Subtle darkening for thinner appearance
+        const borderDarken = 0.4; // Darken by 60%
         r *= borderDarken;
         g *= borderDarken;
         b *= borderDarken;
@@ -449,7 +449,7 @@ export class TerrainLayer3D implements Layer3D {
 
         // Darken if on border between different owners
         if (ownerId !== null && this.isBorderTile(gameX, gameY, ownerId)) {
-          const borderDarken = 0.7; // Subtle darkening for thinner appearance
+          const borderDarken = 0.4; // Darken by 60%
           r *= borderDarken;
           g *= borderDarken;
           b *= borderDarken;
