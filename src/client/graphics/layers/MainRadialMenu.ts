@@ -4,7 +4,7 @@ import { EventBus } from "../../../core/EventBus";
 import { PlayerActions } from "../../../core/game/Game";
 import { TileRef } from "../../../core/game/GameMap";
 import { GameView, PlayerView } from "../../../core/game/GameView";
-import { TransformHandler } from "../TransformHandler";
+import { ITransformHandler } from "../ITransformHandler";
 import { UIState } from "../UIState";
 import { BuildMenu } from "./BuildMenu";
 import { ChatIntegration } from "./ChatIntegration";
@@ -40,7 +40,7 @@ export class MainRadialMenu extends LitElement implements Layer {
   constructor(
     private eventBus: EventBus,
     private game: GameView,
-    private transformHandler: TransformHandler,
+    private transformHandler: ITransformHandler,
     private emojiTable: EmojiTable,
     private buildMenu: BuildMenu,
     private uiState: UIState,

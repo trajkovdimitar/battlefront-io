@@ -27,6 +27,7 @@ import { HeadsUpMessage } from "../graphics/layers/HeadsUpMessage";
 import { ImmunityTimer } from "../graphics/layers/ImmunityTimer";
 import { Layer } from "../graphics/layers/Layer";
 import { Leaderboard } from "../graphics/layers/Leaderboard";
+import { MainRadialMenu } from "../graphics/layers/MainRadialMenu";
 import { MultiTabModal } from "../graphics/layers/MultiTabModal";
 import { PerformanceOverlay } from "../graphics/layers/PerformanceOverlay";
 import { PlayerInfoOverlay } from "../graphics/layers/PlayerInfoOverlay";
@@ -37,10 +38,14 @@ import { SpawnTimer } from "../graphics/layers/SpawnTimer";
 import { TeamStats } from "../graphics/layers/TeamStats";
 import { UnitDisplay } from "../graphics/layers/UnitDisplay";
 import { WinModal } from "../graphics/layers/WinModal";
+import { BuildHandler3D } from "./BuildHandler3D";
 import { CameraController } from "./CameraController";
 import { TransformHandler3D } from "./TransformHandler3D";
+import { FxLayer3D } from "./layers/FxLayer3D";
 import { Layer3D } from "./layers/Layer3D";
+import { StructureLayer3D } from "./layers/StructureLayer3D";
 import { TerrainLayer3D } from "./layers/TerrainLayer3D";
+import { UnitLayer3D } from "./layers/UnitLayer3D";
 
 /**
  * Factory function to create the 3D renderer.
@@ -280,6 +285,27 @@ export function createRenderer3D(
   playerInfo.transform = transformHandler;
   spawnTimer.transformHandler = transformHandler;
 
+  // Create MainRadialMenu (needs transformHandler so must be after renderer creation)
+  const mainRadialMenu = new MainRadialMenu(
+    eventBus,
+    game,
+    transformHandler,
+    emojiTable,
+    buildMenu,
+    uiState,
+    playerPanel,
+  );
+  renderer.addUILayer(mainRadialMenu);
+
+  // Create BuildHandler3D for hotkey building
+  const buildHandler = new BuildHandler3D(
+    game,
+    eventBus,
+    transformHandler,
+    uiState,
+  );
+  renderer.addUILayer(buildHandler);
+
   return renderer;
 }
 
@@ -342,10 +368,9 @@ export class BabylonRenderer {
     // Create layers
     this.layers = [
       new TerrainLayer3D(game),
-      // Future layers will be added here:
-      // new StructureLayer3D(game),
-      // new UnitLayer3D(game, eventBus),
-      // new FxLayer3D(game),
+      new StructureLayer3D(game),
+      new UnitLayer3D(game),
+      new FxLayer3D(game),
     ];
   }
 
@@ -467,6 +492,14 @@ export class BabylonRenderer {
       // Trigger full update with null to indicate redraw
       layer.tick(null);
     }
+  }
+
+  /**
+   * Add a UI layer after initialization
+   */
+  addUILayer(layer: Layer): void {
+    this.uiLayers.push(layer);
+    layer.init?.();
   }
 
   /**
