@@ -23,7 +23,7 @@
     "click_to_copy": "Click to copy"
   },
   "main": {
-    "title": "OpenFront (ALPHA)",
+    "title": "Battlefront",
     "join_discord": "Discord",
     "login_discord": "Login with Discord",
     "sign_in": "Sign in",
@@ -645,7 +645,7 @@
     "not_enough_money": "Not enough money"
   },
   "win_modal": {
-    "support_openfront": "Support OpenFront!",
+    "support_openfront": "Support the Game!",
     "territory_pattern": "Purchase a territory skin to go ad-free!",
     "died": "You died",
     "your_team": "Your team won!",
@@ -657,7 +657,7 @@
     "keep": "Keep Playing",
     "spectate": "Spectate",
     "wishlist": "Wishlist on Steam!",
-    "ofm_winter": "OpenFront Masters Winter Tournament!",
+    "ofm_winter": "Battlefront Tournament!",
     "ofm_winter_description": "Join the competitive tournament and compete against the best players",
     "join_tournament": "Join Tournament",
     "join_discord": "Join Our Discord Community!",
