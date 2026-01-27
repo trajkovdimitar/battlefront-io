@@ -4,13 +4,24 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
 import { CreateCylinder } from "@babylonjs/core/Meshes/Builders/cylinderBuilder";
 import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
+import { CreateTorus } from "@babylonjs/core/Meshes/Builders/torusBuilder";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Scene } from "@babylonjs/core/scene";
 
+import { EventBus } from "../../../core/EventBus";
 import { UnitType } from "../../../core/game/Game";
+import { TileRef } from "../../../core/game/GameMap";
 import { GameUpdateType } from "../../../core/game/GameUpdates";
 import { GameView, UnitView } from "../../../core/game/GameView";
+import {
+  ContextMenuEvent,
+  MouseUpEvent,
+  TouchEvent,
+  UnitSelectionEvent,
+} from "../../InputHandler";
+import { MoveWarshipIntentEvent } from "../../Transport";
+import { ITransformHandler } from "../../graphics/ITransformHandler";
 import { Layer3D } from "./Layer3D";
 
 /** Unit types we render (mobile units, not structures) */
@@ -45,8 +56,12 @@ interface UnitRenderInfo {
   targetZ: number;
 }
 
+/** Configuration for warship selection */
+const WARSHIP_SELECTION_RADIUS = 10;
+
 /**
  * Renders mobile game units (ships, trains, projectiles) as 3D meshes.
+ * Also handles warship selection and movement commands.
  */
 export class UnitLayer3D implements Layer3D {
   private scene: Scene | null = null;
@@ -61,7 +76,19 @@ export class UnitLayer3D implements Layer3D {
   /** Unit configurations */
   private readonly configs: Map<UnitType, UnitConfig>;
 
-  constructor(private game: GameView) {
+  /** Currently selected unit */
+  private selectedUnit: UnitView | null = null;
+
+  /** Selection ring mesh */
+  private selectionRing: Mesh | null = null;
+  private selectionMaterial: StandardMaterial | null = null;
+  private selectionAnimTime: number = 0;
+
+  constructor(
+    private game: GameView,
+    private eventBus?: EventBus,
+    private transformHandler?: ITransformHandler,
+  ) {
     this.configs = new Map([
       // Ships - elongated boxes
       [
@@ -181,11 +208,161 @@ export class UnitLayer3D implements Layer3D {
     // Create parent node for all units
     this.unitParent = new TransformNode("units", scene);
 
+    // Create selection ring (hidden initially)
+    this.createSelectionRing();
+
+    // Subscribe to selection events
+    if (this.eventBus) {
+      this.eventBus.on(MouseUpEvent, (e) => this.onMouseUp(e));
+      this.eventBus.on(TouchEvent, (e) => this.onTouch(e));
+      this.eventBus.on(UnitSelectionEvent, (e) =>
+        this.onUnitSelectionChange(e),
+      );
+    }
+
     // Initial scan of all units
     for (const unit of this.game.units()) {
       if (MOBILE_UNIT_TYPES.has(unit.type()) && unit.isActive()) {
         this.addUnit(unit);
       }
+    }
+  }
+
+  /**
+   * Create the selection ring mesh for highlighting selected units
+   */
+  private createSelectionRing(): void {
+    if (!this.scene) return;
+
+    // Create a torus for the selection ring
+    this.selectionRing = CreateTorus(
+      "selectionRing",
+      { diameter: 12, thickness: 0.8, tessellation: 32 },
+      this.scene,
+    );
+    this.selectionRing.isVisible = false;
+
+    // Create glowing material
+    this.selectionMaterial = new StandardMaterial("selectionMat", this.scene);
+    this.selectionMaterial.emissiveColor = new Color3(1, 1, 0.5); // Yellow glow
+    this.selectionMaterial.diffuseColor = new Color3(1, 1, 0.3);
+    this.selectionMaterial.specularColor = new Color3(0, 0, 0);
+    this.selectionMaterial.alpha = 0.8;
+    this.selectionRing.material = this.selectionMaterial;
+  }
+
+  /**
+   * Find player-owned warships near the given cell within selection radius
+   */
+  private findWarshipsNearCell(clickRef: TileRef): UnitView[] {
+    return this.game
+      .units(UnitType.Warship)
+      .filter(
+        (unit) =>
+          unit.isActive() &&
+          unit.owner() === this.game.myPlayer() &&
+          this.game.manhattanDist(unit.tile(), clickRef) <=
+            WARSHIP_SELECTION_RADIUS,
+      )
+      .sort((a, b) => {
+        const distA = this.game.manhattanDist(a.tile(), clickRef);
+        const distB = this.game.manhattanDist(b.tile(), clickRef);
+        return distA - distB;
+      });
+  }
+
+  /**
+   * Handle mouse up events for warship selection
+   */
+  private onMouseUp(event: MouseUpEvent): void {
+    if (!this.transformHandler || !this.eventBus) return;
+
+    const cell = this.transformHandler.screenToWorldCoordinates(
+      event.x,
+      event.y,
+    );
+    if (!this.game.isValidCoord(cell.x, cell.y)) return;
+
+    const clickRef = this.game.ref(cell.x, cell.y);
+    if (!this.game.isOcean(clickRef)) return;
+
+    if (this.selectedUnit) {
+      // Move the selected warship
+      this.eventBus.emit(
+        new MoveWarshipIntentEvent(this.selectedUnit.id(), clickRef),
+      );
+      // Deselect
+      this.eventBus.emit(new UnitSelectionEvent(this.selectedUnit, false));
+      return;
+    }
+
+    // Find warships near this tile
+    const nearbyWarships = this.findWarshipsNearCell(clickRef);
+    if (nearbyWarships.length > 0) {
+      this.eventBus.emit(new UnitSelectionEvent(nearbyWarships[0], true));
+    }
+  }
+
+  /**
+   * Handle touch events for warship selection
+   */
+  private onTouch(event: TouchEvent): void {
+    if (!this.transformHandler || !this.eventBus) return;
+
+    const cell = this.transformHandler.screenToWorldCoordinates(
+      event.x,
+      event.y,
+    );
+    if (!this.game.isValidCoord(cell.x, cell.y)) return;
+
+    const clickRef = this.game.ref(cell.x, cell.y);
+    if (!this.game.isOcean(clickRef)) {
+      this.eventBus.emit(new ContextMenuEvent(event.x, event.y));
+      return;
+    }
+
+    if (this.selectedUnit) {
+      this.onMouseUp(new MouseUpEvent(event.x, event.y));
+      return;
+    }
+
+    const nearbyWarships = this.findWarshipsNearCell(clickRef);
+    if (nearbyWarships.length > 0) {
+      this.eventBus.emit(new UnitSelectionEvent(nearbyWarships[0], true));
+    } else {
+      this.eventBus.emit(new ContextMenuEvent(event.x, event.y));
+    }
+  }
+
+  /**
+   * Handle unit selection changes
+   */
+  private onUnitSelectionChange(event: UnitSelectionEvent): void {
+    if (event.isSelected) {
+      this.selectedUnit = event.unit;
+    } else if (this.selectedUnit === event.unit) {
+      this.selectedUnit = null;
+    }
+    this.updateSelectionRing();
+  }
+
+  /**
+   * Update the selection ring position and visibility
+   */
+  private updateSelectionRing(): void {
+    if (!this.selectionRing) return;
+
+    if (this.selectedUnit && this.selectedUnit.isActive()) {
+      const info = this.units.get(this.selectedUnit.id());
+      if (info) {
+        this.selectionRing.isVisible = true;
+        this.selectionRing.position.x = info.node.position.x;
+        this.selectionRing.position.z = info.node.position.z;
+        this.selectionRing.position.y = 1.5; // Slightly above water
+      }
+    } else {
+      this.selectionRing.isVisible = false;
+      this.selectedUnit = null;
     }
   }
 
@@ -379,13 +556,32 @@ export class UnitLayer3D implements Layer3D {
   }
 
   update(deltaTime: number): void {
-    // Future: smooth interpolation between positions
+    // Animate selection ring
+    if (this.selectionRing?.isVisible && this.selectionMaterial) {
+      this.selectionAnimTime += deltaTime;
+
+      // Pulsating opacity
+      const baseOpacity = 0.6;
+      const pulseAmount = 0.3;
+      const opacity =
+        baseOpacity + Math.sin(this.selectionAnimTime * 0.005) * pulseAmount;
+      this.selectionMaterial.alpha = opacity;
+
+      // Gentle rotation
+      this.selectionRing.rotation.y += deltaTime * 0.001;
+
+      // Update position to follow selected unit
+      this.updateSelectionRing();
+    }
   }
 
   dispose(): void {
     this.unitParent?.dispose();
+    this.selectionRing?.dispose();
+    this.selectionMaterial?.dispose();
     this.materialCache.forEach((m) => m.dispose());
     this.materialCache.clear();
     this.units.clear();
+    this.selectedUnit = null;
   }
 }

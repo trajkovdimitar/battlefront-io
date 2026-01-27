@@ -20,6 +20,13 @@ const EXPLOSION_UNIT_TYPES = new Set<UnitType>([
   UnitType.MIRVWarhead,
 ]);
 
+/** Ship types that create wakes */
+const SHIP_TYPES = new Set<UnitType>([
+  UnitType.Warship,
+  UnitType.TransportShip,
+  UnitType.TradeShip,
+]);
+
 /** Configuration for explosion effects */
 interface ExplosionConfig {
   particleCount: number;
@@ -41,6 +48,14 @@ interface ActiveExplosion {
   duration: number;
 }
 
+/** Ship wake tracking info */
+interface ShipWake {
+  unitId: number;
+  system: ParticleSystem;
+  lastX: number;
+  lastZ: number;
+}
+
 /**
  * Renders visual effects (explosions, particles) in 3D.
  * Uses Babylon.js ParticleSystem for realistic explosions.
@@ -55,8 +70,14 @@ export class FxLayer3D implements Layer3D {
   /** Track which units we've already created explosions for */
   private explodedUnits = new Set<number>();
 
+  /** Ship wake particle systems */
+  private shipWakes = new Map<number, ShipWake>();
+
   /** Particle texture */
   private particleTexture: Texture | null = null;
+
+  /** Wake particle texture (blue-ish water foam) */
+  private wakeTexture: Texture | null = null;
 
   /** Explosion configurations */
   private readonly explosionConfigs: Map<string, ExplosionConfig>;
@@ -136,12 +157,22 @@ export class FxLayer3D implements Layer3D {
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAsTAAALEwEAmpwYAAABF0lEQVRYhe2WsQ6CMBCG/1IHN8bBxAG3+gxufhx3xnfiHYwDxhUHByA4uAiJg0HQhUJqaQnYNsR/adL7ev26XQvkOhfAGsARwBrAiNLDDeABwB3ADMA+pVcrABcAVZXrPgFsk+p1K4BHkuYqLQEcqVy3AhglcZeJGoDYxAaAWCKtJOoxALGJLQCxRGpJVGMAYhNbAGKJtJKoxQDEJrYAxBJpJVGNAYhNbAGIJdJKohIDEJvYAhBLpJVEJQYgNrEFIJZIK4lyDEBsYgtALJFWEuUYgNjEFoBYIq0kSjEAsYktALFEWkmUYgBiE1sAYom0kijGAMQmtgDEEmklUYgBiE1sAQgl0kqiIAPwh8QGgFAirSS+AZqv8xvFEPmVAAAAAElFTkSuQmCC",
       scene,
     );
+
+    // Use same texture for wakes (will be tinted blue by particle colors)
+    this.wakeTexture = this.particleTexture;
+
+    // Create wakes for existing ships
+    for (const unit of this.game.units()) {
+      if (SHIP_TYPES.has(unit.type()) && unit.isActive()) {
+        this.createShipWake(unit);
+      }
+    }
   }
 
   tick(): void {
     if (!this.scene) return;
 
-    // Process unit updates for explosions
+    // Process unit updates for explosions and ships
     const updates = this.game.updatesSinceLastTick();
     const unitUpdates = updates?.[GameUpdateType.Unit];
 
@@ -150,13 +181,25 @@ export class FxLayer3D implements Layer3D {
         const unitView = this.game.unit(update.id);
         if (!unitView) continue;
 
-        // Check if this unit type triggers explosions
-        if (!EXPLOSION_UNIT_TYPES.has(unitView.type())) continue;
+        // Handle explosions
+        if (EXPLOSION_UNIT_TYPES.has(unitView.type())) {
+          if (!unitView.isActive() && !this.explodedUnits.has(update.id)) {
+            this.explodedUnits.add(update.id);
+            this.createExplosion(unitView);
+          }
+        }
 
-        // Only trigger explosion when unit becomes inactive (detonates/impacts)
-        if (!unitView.isActive() && !this.explodedUnits.has(update.id)) {
-          this.explodedUnits.add(update.id);
-          this.createExplosion(unitView);
+        // Handle ship wakes
+        if (SHIP_TYPES.has(unitView.type())) {
+          if (unitView.isActive()) {
+            if (this.shipWakes.has(update.id)) {
+              this.updateShipWake(unitView);
+            } else {
+              this.createShipWake(unitView);
+            }
+          } else {
+            this.removeShipWake(update.id);
+          }
         }
       }
     }
@@ -272,6 +315,113 @@ export class FxLayer3D implements Layer3D {
     });
   }
 
+  /**
+   * Create a wake particle system for a ship
+   */
+  private createShipWake(unit: UnitView): void {
+    if (!this.scene || !this.wakeTexture) return;
+
+    const gameX = this.game.x(unit.tile());
+    const gameY = this.game.y(unit.tile());
+    const worldX = gameX;
+    const worldZ = this.game.height() - 1 - gameY;
+
+    // Create wake particle system
+    const system = new ParticleSystem(`wake_${unit.id()}`, 100, this.scene);
+
+    system.particleTexture = this.wakeTexture;
+
+    // Emission at ship position
+    system.emitter = new Vector3(worldX, 0.5, worldZ);
+    system.minEmitBox = new Vector3(-1, 0, -2);
+    system.maxEmitBox = new Vector3(1, 0, 0);
+
+    // Small foam particles
+    system.minSize = 0.3;
+    system.maxSize = 1.2;
+    system.minLifeTime = 0.5;
+    system.maxLifeTime = 1.5;
+
+    // Water colors (white foam with blue tint)
+    system.color1 = new Color4(0.9, 0.95, 1, 0.8);
+    system.color2 = new Color4(0.6, 0.8, 1, 0.6);
+    system.colorDead = new Color4(0.4, 0.6, 0.9, 0);
+
+    // Slow emission, particles drift backward
+    system.emitRate = 20;
+    system.direction1 = new Vector3(-0.5, 0.2, -1);
+    system.direction2 = new Vector3(0.5, 0.5, -0.5);
+
+    // Slight gravity to settle
+    system.gravity = new Vector3(0, -0.5, 0);
+
+    // Low power (slow drift)
+    system.minEmitPower = 0.5;
+    system.maxEmitPower = 1.5;
+
+    // Standard blending for water effect
+    system.blendMode = ParticleSystem.BLENDMODE_STANDARD;
+
+    system.start();
+
+    this.shipWakes.set(unit.id(), {
+      unitId: unit.id(),
+      system,
+      lastX: worldX,
+      lastZ: worldZ,
+    });
+  }
+
+  /**
+   * Update wake position as ship moves
+   */
+  private updateShipWake(unit: UnitView): void {
+    const wake = this.shipWakes.get(unit.id());
+    if (!wake) return;
+
+    const gameX = this.game.x(unit.tile());
+    const gameY = this.game.y(unit.tile());
+    const worldX = gameX;
+    const worldZ = this.game.height() - 1 - gameY;
+
+    // Update emitter position
+    if (wake.system.emitter instanceof Vector3) {
+      wake.system.emitter.x = worldX;
+      wake.system.emitter.z = worldZ;
+    }
+
+    // Calculate movement direction for wake orientation
+    const dx = worldX - wake.lastX;
+    const dz = worldZ - wake.lastZ;
+    const isMoving = Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01;
+
+    // Adjust emission based on movement
+    wake.system.emitRate = isMoving ? 30 : 5;
+
+    // Update direction to be opposite of movement
+    if (isMoving) {
+      const length = Math.sqrt(dx * dx + dz * dz);
+      const normX = -dx / length;
+      const normZ = -dz / length;
+      wake.system.direction1 = new Vector3(normX - 0.3, 0.2, normZ - 0.3);
+      wake.system.direction2 = new Vector3(normX + 0.3, 0.5, normZ + 0.3);
+    }
+
+    wake.lastX = worldX;
+    wake.lastZ = worldZ;
+  }
+
+  /**
+   * Remove wake when ship is destroyed
+   */
+  private removeShipWake(unitId: number): void {
+    const wake = this.shipWakes.get(unitId);
+    if (wake) {
+      wake.system.dispose();
+      this.shipWakes.delete(unitId);
+    }
+  }
+
   update(deltaTime: number): void {
     // Particle systems update automatically
   }
@@ -281,6 +431,12 @@ export class FxLayer3D implements Layer3D {
       exp.system.dispose();
     }
     this.activeExplosions = [];
+
+    for (const wake of this.shipWakes.values()) {
+      wake.system.dispose();
+    }
+    this.shipWakes.clear();
+
     this.particleTexture?.dispose();
     this.fxParent?.dispose();
     this.explodedUnits.clear();

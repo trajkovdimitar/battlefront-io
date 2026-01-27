@@ -369,7 +369,7 @@ export class BabylonRenderer {
     this.layers = [
       new TerrainLayer3D(game),
       new StructureLayer3D(game),
-      new UnitLayer3D(game),
+      new UnitLayer3D(game, eventBus, this.transformHandler),
       new FxLayer3D(game),
     ];
   }
