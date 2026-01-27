@@ -134,19 +134,19 @@ Map game tiles to world units: 1 tile = 1 world unit (adjustable)
 
 ## Migration Milestones
 
-### Milestone 1: Foundation (Target: Week 2)
+### Milestone 1: Foundation (Target: Week 2) ✅
 
-- [ ] Babylon.js project setup
-- [ ] Basic scene with camera
-- [ ] Flat plane representing map bounds
-- [ ] Camera controls (pan, zoom, rotate)
-- [ ] Can switch between 2D/3D renderers
+- [x] Babylon.js project setup
+- [x] Basic scene with camera
+- [x] Flat plane representing map bounds
+- [x] Camera controls (pan, zoom, rotate)
+- [x] Can switch between 2D/3D renderers
 
-### Milestone 2: Terrain (Target: Week 4)
+### Milestone 2: Terrain (Target: Week 4) ✅
 
-- [ ] Territory mesh generation from map data
-- [ ] Player ownership colors on mesh
-- [ ] Water vs land distinction
+- [x] Territory mesh generation from map data
+- [x] Player ownership colors on mesh
+- [x] Water vs land distinction
 - [ ] Border rendering between territories
 
 ### Milestone 3: Structures (Target: Week 6)
@@ -243,6 +243,25 @@ _Updates added as work progresses_
 - Created TerrainLayer3D with heightmap generation
 - Added 2D/3D toggle in settings UI
 - Modified ClientGameRunner to support both renderers
+
+### Session 3: Coordinate Conversion & Performance
+
+- Fixed shader loading (import default shaders as side effects for tree-shaking)
+- Created TransformHandler3D for proper 3D coordinate conversion using ray picking
+- Created ITransformHandler interface for 2D/3D type compatibility
+- Implemented incremental territory color updates (only update changed tiles)
+- Fixed Ray module import for createPickingRay functionality
+- Mouse picking now works correctly in 3D mode
+
+**Completed Milestones:**
+
+- ✅ Milestone 1: Foundation (scene, camera, lighting, 2D/3D toggle)
+- ✅ Milestone 2: Terrain (heightmap, territory colors, water, incremental updates)
+
+**Next Steps:**
+
+- Milestone 3: Structures (City, Port, Factory, Silo, SAM, DefensePost)
+- Milestone 4: Units (Ships, Trains, movement/rotation)
 
 **To test the 3D renderer:**
 
