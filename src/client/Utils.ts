@@ -113,6 +113,8 @@ export function createCanvas(): HTMLCanvasElement {
   canvas.style.width = "100%";
   canvas.style.height = "100%";
   canvas.style.touchAction = "none";
+  // Ensure canvas is behind UI elements
+  canvas.style.zIndex = "0";
 
   return canvas;
 }

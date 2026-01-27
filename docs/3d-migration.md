@@ -149,34 +149,35 @@ Map game tiles to world units: 1 tile = 1 world unit (adjustable)
 - [x] Water vs land distinction
 - [ ] Border rendering between territories
 
-### Milestone 3: Structures (Target: Week 6)
+### Milestone 3: Structures (Target: Week 6) ✅
 
-- [ ] Building meshes (procedural or models)
-- [ ] City, Port, Factory, Silo, SAM, DefensePost
-- [ ] Construction state visualization
-- [ ] Correct positioning on terrain
+- [x] Building meshes (procedural)
+- [x] City (cylinder), Port (pentagon), Factory (cylinder+chimney)
+- [x] MissileSilo (cone), DefensePost (octagon), SAMLauncher (box)
+- [x] Construction state visualization (gray color)
+- [x] Correct positioning on terrain
 
-### Milestone 4: Units (Target: Week 8)
+### Milestone 4: Units (Target: Week 8) ✅
 
-- [ ] Ship meshes (Warship, Transport, Trade)
-- [ ] Train meshes with railroad tracks
-- [ ] Unit movement/rotation
-- [ ] Selection highlighting
+- [x] Ship meshes (Warship, Transport, TradeShip)
+- [x] Train meshes
+- [x] Unit movement/rotation (face direction of travel)
+- [ ] Selection highlighting (future)
 
-### Milestone 5: Projectiles (Target: Week 10)
+### Milestone 5: Projectiles (Target: Week 10) ✅
 
-- [ ] Missile trajectory rendering
-- [ ] AtomBomb, HydrogenBomb, MIRV, MIRVWarhead
-- [ ] SAM intercept missiles
-- [ ] Shell projectiles
+- [x] Shell projectiles (spheres)
+- [x] AtomBomb, HydrogenBomb, MIRV, MIRVWarhead (cylinders/cones)
+- [x] SAM intercept missiles
+- [x] Proper altitude positioning (missiles high, shells mid-air)
 
-### Milestone 6: Effects (Target: Week 14)
+### Milestone 6: Effects (Target: Week 14) ✅
 
-- [ ] Explosion particle systems (4 types)
-- [ ] SAM intercept effects
-- [ ] Ship wakes
-- [ ] Smoke/fire for buildings
-- [ ] Conquest animation
+- [x] Explosion particle systems (mini, SAM, nuke, hydrogen)
+- [x] SAM intercept effects
+- [ ] Ship wakes (future)
+- [ ] Smoke/fire for buildings (future)
+- [ ] Conquest animation (future)
 
 ### Milestone 7: Polish (Target: Week 18)
 
@@ -262,6 +263,29 @@ _Updates added as work progresses_
 
 - Milestone 3: Structures (City, Port, Factory, Silo, SAM, DefensePost)
 - Milestone 4: Units (Ships, Trains, movement/rotation)
+
+### Session 4: Full 3D Rendering Pipeline
+
+- Created StructureLayer3D with procedural building meshes
+- Created UnitLayer3D for ships, trains, and projectiles
+- Created FxLayer3D with Babylon.js particle explosions
+- Added BuildHandler3D for hotkey building in 3D mode
+- Added MainRadialMenu to 3D renderer (right-click menu)
+- Updated MainRadialMenu to use ITransformHandler interface
+
+**All core milestones complete!** The 3D renderer now supports:
+
+- Terrain with heightmap and territory colors
+- All structure types with procedural meshes
+- All unit types (ships, trains, missiles, bombs)
+- Explosion particle effects
+
+**Remaining polish items:**
+
+- Ship wakes
+- Building smoke/fire effects
+- Selection highlighting
+- LOD system for performance
 
 **To test the 3D renderer:**
 
