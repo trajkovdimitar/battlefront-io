@@ -1,5 +1,5 @@
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Scene } from "@babylonjs/core/scene";
 import { EventBus } from "../../../core/EventBus";
 import { Theme } from "../../../core/configuration/Config";
@@ -31,8 +31,6 @@ export class NameLayer3D {
   private renders: Map<string, PlayerNameRender> = new Map();
   private theme: Theme;
   private isVisible: boolean = true;
-  private lastTick: number = 0;
-  private tickInterval: number = 100; // Update positions every 100ms
 
   constructor(
     private game: GameView,
@@ -89,10 +87,6 @@ export class NameLayer3D {
    */
   update(): void {
     if (!this.container || !this.isVisible) return;
-
-    const now = performance.now();
-    if (now - this.lastTick < this.tickInterval) return;
-    this.lastTick = now;
 
     const camera = this.cameraController.getCamera();
     const engine = this.scene.getEngine();
@@ -160,10 +154,10 @@ export class NameLayer3D {
     const worldY = 5; // Slightly above terrain
     const worldPos = new Vector3(worldX, worldY, worldZ);
 
-    // Project to screen
+    // Project to screen using identity matrix since point is already in world space
     const screenPos = Vector3.Project(
       worldPos,
-      camera.getWorldMatrix(),
+      Matrix.Identity(),
       this.scene.getTransformMatrix(),
       camera.viewport.toGlobal(
         engine.getRenderWidth(),
