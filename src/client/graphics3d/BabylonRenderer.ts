@@ -43,6 +43,7 @@ import { CameraController } from "./CameraController";
 import { TransformHandler3D } from "./TransformHandler3D";
 import { FxLayer3D } from "./layers/FxLayer3D";
 import { Layer3D } from "./layers/Layer3D";
+import { NameLayer3D } from "./layers/NameLayer3D";
 import { StructureLayer3D } from "./layers/StructureLayer3D";
 import { TerrainLayer3D } from "./layers/TerrainLayer3D";
 import { UnitLayer3D } from "./layers/UnitLayer3D";
@@ -319,6 +320,7 @@ export class BabylonRenderer {
   private cameraController: CameraController;
   private layers: Layer3D[] = [];
   private uiLayers: Layer[] = [];
+  private nameLayer: NameLayer3D | null = null;
   private lastFrameTime: number = 0;
 
   // Compatibility properties for ClientGameRunner
@@ -432,6 +434,15 @@ export class BabylonRenderer {
     // Center camera on map
     this.cameraController.centerOnMap();
 
+    // Create name layer for player names on territories
+    this.nameLayer = new NameLayer3D(
+      this.game,
+      this.scene,
+      this.cameraController,
+      this.eventBus,
+    );
+    this.nameLayer.init();
+
     // Start render loop
     this.lastFrameTime = performance.now();
     this.engine.runRenderLoop(() => this.renderLoop());
@@ -464,6 +475,9 @@ export class BabylonRenderer {
       layer.update?.(deltaTime);
     }
 
+    // Update name layer positions
+    this.nameLayer?.update();
+
     // Render scene
     this.scene.render();
   }
@@ -482,6 +496,9 @@ export class BabylonRenderer {
     for (const layer of this.uiLayers) {
       layer.tick?.();
     }
+
+    // Tick name layer
+    this.nameLayer?.tick();
   }
 
   /**
@@ -523,6 +540,7 @@ export class BabylonRenderer {
     for (const layer of this.layers) {
       layer.dispose();
     }
+    this.nameLayer?.dispose();
     this.cameraController.dispose();
     this.scene.dispose();
     this.engine.dispose();
