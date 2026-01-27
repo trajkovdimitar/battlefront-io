@@ -84,6 +84,14 @@ export class UserSettings {
     this.get("settings.focusLocked", true);
   }
 
+  use3DRenderer() {
+    return this.get("settings.use3DRenderer", false);
+  }
+
+  toggle3DRenderer() {
+    this.set("settings.use3DRenderer", !this.use3DRenderer());
+  }
+
   toggleLeftClickOpenMenu() {
     this.set("settings.leftClickOpensMenu", !this.leftClickOpensMenu());
   }

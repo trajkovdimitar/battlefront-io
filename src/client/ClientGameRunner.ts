@@ -49,7 +49,11 @@ import {
 import { createCanvas } from "./Utils";
 import { createRenderer, GameRenderer } from "./graphics/GameRenderer";
 import { GoToPlayerEvent } from "./graphics/layers/Leaderboard";
+import { BabylonRenderer, createRenderer3D } from "./graphics3d";
 import SoundManager from "./sound/SoundManager";
+
+// Union type for both renderer types
+type Renderer = GameRenderer | BabylonRenderer;
 
 export interface LobbyConfig {
   serverConfig: ServerConfig;
@@ -231,10 +235,15 @@ async function createClientGame(
   );
 
   const canvas = createCanvas();
-  const gameRenderer = createRenderer(canvas, gameView, eventBus);
+
+  // Choose renderer based on user settings
+  const use3D = userSettings.use3DRenderer();
+  const gameRenderer: Renderer = use3D
+    ? createRenderer3D(canvas, gameView, eventBus)
+    : createRenderer(canvas, gameView, eventBus);
 
   console.log(
-    `creating private game got difficulty: ${lobbyConfig.gameStartInfo.config.difficulty}`,
+    `creating game with ${use3D ? "3D" : "2D"} renderer, difficulty: ${lobbyConfig.gameStartInfo.config.difficulty}`,
   );
 
   return new ClientGameRunner(
@@ -265,7 +274,7 @@ export class ClientGameRunner {
   constructor(
     private lobby: LobbyConfig,
     private eventBus: EventBus,
-    private renderer: GameRenderer,
+    private renderer: Renderer,
     private input: InputHandler,
     private transport: Transport,
     private worker: WorkerClient,

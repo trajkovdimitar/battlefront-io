@@ -377,6 +377,15 @@ export class UserSettingModal extends BaseModal {
     this.userSettings.set("settings.performanceOverlay", enabled);
   }
 
+  private toggle3DRenderer(e: CustomEvent<{ checked: boolean }>) {
+    const enabled = e.detail?.checked;
+    if (typeof enabled !== "boolean") return;
+
+    this.userSettings.set("settings.use3DRenderer", enabled);
+    console.log("🎮 3D Renderer:", enabled ? "ON" : "OFF");
+    // Note: Requires game restart to take effect
+  }
+
   private openFlagSelector = () => {
     const flagInputModal =
       document.querySelector<FlagInputModalElement>("#flag-input-modal");
@@ -882,6 +891,15 @@ export class UserSettingModal extends BaseModal {
         id="performance-overlay-toggle"
         .checked=${this.userSettings.performanceOverlay()}
         @change=${this.togglePerformanceOverlay}
+      ></setting-toggle>
+
+      <!-- 🎮 3D Renderer (Experimental) -->
+      <setting-toggle
+        label="${translateText("user_setting.renderer_3d_label")}"
+        description="${translateText("user_setting.renderer_3d_desc")}"
+        id="renderer-3d-toggle"
+        .checked=${this.userSettings.use3DRenderer()}
+        @change=${this.toggle3DRenderer}
       ></setting-toggle>
 
       <!-- ⚔️ Attack Ratio -->
