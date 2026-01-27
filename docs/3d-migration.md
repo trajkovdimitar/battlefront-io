@@ -234,3 +234,20 @@ _Updates added as work progresses_
 - Confirmed Canvas 2D architecture (not PixiJS)
 - Documented layer system and state flow
 - Created this design document
+
+### Session 2: Foundation Implementation
+
+- Installed Babylon.js dependencies
+- Created BabylonRenderer with scene, lighting, render loop
+- Implemented CameraController with RTS-style controls
+- Created TerrainLayer3D with heightmap generation
+- Added 2D/3D toggle in settings UI
+- Modified ClientGameRunner to support both renderers
+
+**To test the 3D renderer:**
+
+1. Run `npm run dev`
+2. Go to Settings
+3. Enable "3D Renderer (Experimental)"
+4. Restart the game (refresh page)
+5. Start a game to see the 3D terrain
