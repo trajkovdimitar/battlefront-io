@@ -36,10 +36,14 @@ export class TerrainLayer3D implements Layer3D {
   private scene: Scene | null = null;
   private terrainMesh: Mesh | null = null;
   private waterMesh: Mesh | null = null;
-  private borderMesh: LinesMesh | null = null;
   private terrainMaterial: StandardMaterial | null = null;
   private waterMaterial: StandardMaterial | null = null;
   private config: TerrainConfig;
+
+  // Double-buffered border meshes for smooth updates
+  private borderMeshA: LinesMesh | null = null;
+  private borderMeshB: LinesMesh | null = null;
+  private activeBorderIndex: 0 | 1 = 0; // Which mesh is currently visible
 
   // Cached terrain data
   private heightmap: Float32Array | null = null;
@@ -266,10 +270,10 @@ export class TerrainLayer3D implements Layer3D {
   }
 
   /**
-   * Create or update territory border lines
+   * Build border line data from current ownership state
    */
-  private updateBorders(): void {
-    if (!this.scene || !this.heightmap) return;
+  private buildBorderLines(): Vector3[][] {
+    if (!this.heightmap) return [];
 
     const width = this.game.width();
     const height = this.game.height();
@@ -328,17 +332,37 @@ export class TerrainLayer3D implements Layer3D {
       }
     }
 
-    // Dispose old border mesh
-    this.borderMesh?.dispose();
+    return lines;
+  }
+
+  /**
+   * Update territory border lines using double buffering.
+   * Builds new borders into the inactive mesh, then swaps visibility atomically.
+   * This eliminates visual flickering during updates.
+   */
+  private updateBorders(): void {
+    if (!this.scene) return;
+
+    const lines = this.buildBorderLines();
+
+    // Determine which mesh to build into (the inactive one)
+    const inactiveIndex = this.activeBorderIndex === 0 ? 1 : 0;
+    const inactiveMesh =
+      inactiveIndex === 0 ? this.borderMeshA : this.borderMeshB;
+
+    // Dispose the inactive mesh before rebuilding
+    inactiveMesh?.dispose();
 
     if (lines.length === 0) {
-      this.borderMesh = null;
+      // No borders - hide both meshes
+      if (this.borderMeshA) this.borderMeshA.isVisible = false;
+      if (this.borderMeshB) this.borderMeshB.isVisible = false;
       return;
     }
 
-    // Create new line mesh
-    this.borderMesh = CreateLineSystem(
-      "borders",
+    // Create new line mesh into the inactive slot
+    const newMesh = CreateLineSystem(
+      `borders_${inactiveIndex}`,
       {
         lines,
         updatable: false,
@@ -346,9 +370,27 @@ export class TerrainLayer3D implements Layer3D {
       this.scene,
     );
 
-    // Dark border color for visibility
-    this.borderMesh.color = new Color3(0.1, 0.1, 0.1);
-    this.borderMesh.alpha = 0.8;
+    // Style the new mesh
+    newMesh.color = new Color3(0.1, 0.1, 0.1);
+    newMesh.alpha = 0.8;
+    newMesh.isVisible = true;
+
+    // Store in the inactive slot
+    if (inactiveIndex === 0) {
+      this.borderMeshA = newMesh;
+    } else {
+      this.borderMeshB = newMesh;
+    }
+
+    // Hide the old active mesh
+    const oldActiveMesh =
+      this.activeBorderIndex === 0 ? this.borderMeshA : this.borderMeshB;
+    if (oldActiveMesh && oldActiveMesh !== newMesh) {
+      oldActiveMesh.isVisible = false;
+    }
+
+    // Swap active index
+    this.activeBorderIndex = inactiveIndex as 0 | 1;
   }
 
   /**
@@ -506,7 +548,8 @@ export class TerrainLayer3D implements Layer3D {
   dispose(): void {
     this.terrainMesh?.dispose();
     this.waterMesh?.dispose();
-    this.borderMesh?.dispose();
+    this.borderMeshA?.dispose();
+    this.borderMeshB?.dispose();
     this.terrainMaterial?.dispose();
     this.waterMaterial?.dispose();
   }
