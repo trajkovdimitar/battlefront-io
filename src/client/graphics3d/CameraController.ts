@@ -31,23 +31,23 @@ const DEFAULT_CONFIG: CameraConfig = {
   initialRadius: 500,
   minRadius: 50,
   maxRadius: 2000,
-  initialBeta: Math.PI / 4, // 45 degrees from top
+  initialBeta: 0.01, // Nearly straight down (top-down view like 2D)
   initialAlpha: -Math.PI / 2, // Looking down -Z axis
-  minBeta: 0.1,
+  minBeta: 0.01, // Allow nearly straight down
   maxBeta: Math.PI / 2.5, // ~72 degrees (not quite flat)
   mapWidth: 1000,
   mapHeight: 1000,
 };
 
 /**
- * RTS-style camera controller.
- * Provides pan, zoom, and tilt controls for viewing the battlefield.
+ * 2D-style camera controller for 3D renderer.
+ * Default top-down view that feels like the 2D version.
  *
  * Controls:
+ * - Left-click drag: Pan across the map (like 2D version)
  * - WASD / Arrow keys: Pan camera
- * - Middle-mouse drag: Pan camera
  * - Scroll wheel: Zoom in/out
- * - Alt + Left-drag: Rotate camera (to view structures)
+ * - Alt + Left-drag: Rotate camera (to view 3D structures)
  * - Home key: Reset to default top-down view
  * - Right-click: Reserved for game menu (no camera action)
  */
@@ -61,6 +61,7 @@ export class CameraController {
   private isRotating: boolean = false;
   private lastPointerX: number = 0;
   private lastPointerY: number = 0;
+  private pointerInput: { buttons: number[] } | null = null;
 
   constructor(
     scene: Scene,
@@ -108,14 +109,14 @@ export class CameraController {
     this.camera.angularSensibilityY = Number.MAX_SAFE_INTEGER;
 
     // Configure mouse buttons:
-    // Button 0 (left) = no action (selection handled elsewhere)
-    // Button 1 (middle) = pan
+    // Button 0 (left) = pan (like 2D version)
+    // Button 1 (middle) = also pan
     // Button 2 (right) = no action (menu handled elsewhere)
-    const pointerInput = this.camera.inputs.attached.pointers as unknown as {
+    this.pointerInput = this.camera.inputs.attached.pointers as unknown as {
       buttons: number[];
     };
-    if (pointerInput) {
-      pointerInput.buttons = [1]; // Only middle mouse for camera control
+    if (this.pointerInput) {
+      this.pointerInput.buttons = [0, 1]; // Left and middle mouse for panning
     }
 
     // Keyboard controls (WASD for panning)
@@ -137,9 +138,17 @@ export class CameraController {
       if (kbInfo.event.key === "Alt") {
         if (kbInfo.type === KeyboardEventTypes.KEYDOWN) {
           this.isAltDown = true;
+          // Disable left-click pan when Alt is held (so rotation works)
+          if (this.pointerInput) {
+            this.pointerInput.buttons = [1]; // Only middle mouse
+          }
         } else if (kbInfo.type === KeyboardEventTypes.KEYUP) {
           this.isAltDown = false;
           this.isRotating = false;
+          // Re-enable left-click pan
+          if (this.pointerInput) {
+            this.pointerInput.buttons = [0, 1]; // Left and middle mouse
+          }
         }
       }
 
