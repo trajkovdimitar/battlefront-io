@@ -347,6 +347,14 @@ export class BabylonRenderer {
     this.scene = new Scene(this.engine);
     this.scene.clearColor = new Color4(0.4, 0.6, 0.8, 1); // Light sky blue background
 
+    // Disable Babylon's automatic mesh picking on pointer events.
+    // We handle all input manually via InputHandler, so the default picking
+    // (which tests intersection against every mesh on every click/move) is
+    // unnecessary and causes freezes when clicks are spammed.
+    this.scene.skipPointerDownPicking = true;
+    this.scene.skipPointerUpPicking = true;
+    this.scene.skipPointerMovePicking = true;
+
     // Create camera
     this.cameraController = new CameraController(this.scene, canvas, {
       mapWidth: game.width(),
@@ -469,6 +477,9 @@ export class BabylonRenderer {
     const now = performance.now();
     const deltaTime = now - this.lastFrameTime;
     this.lastFrameTime = now;
+
+    // Invalidate ray pick cache for new frame
+    this.transformHandler.newFrame();
 
     // Update layers
     for (const layer of this.layers) {

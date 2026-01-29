@@ -26,6 +26,15 @@ export class TransformHandler3D implements ITransformHandler {
   // For compatibility with 2D code that reads these
   public scale: number = 1;
 
+  // Ray pick cache to avoid redundant expensive calculations within same frame
+  private rayPickCache: {
+    screenX: number;
+    screenY: number;
+    frameId: number;
+    result: Cell;
+  } | null = null;
+  private currentFrameId: number = 0;
+
   constructor(
     private game: GameView,
     private eventBus: EventBus,
@@ -65,10 +74,29 @@ export class TransformHandler3D implements ITransformHandler {
   }
 
   /**
+   * Increment frame ID - call this at start of each render frame
+   * to invalidate ray pick cache between frames.
+   */
+  newFrame(): void {
+    this.currentFrameId++;
+  }
+
+  /**
    * Convert screen coordinates to game world coordinates.
    * Uses ray picking to intersect with the Y=0 plane.
+   * Results are cached within the same frame to avoid redundant expensive calculations.
    */
   screenToWorldCoordinates(screenX: number, screenY: number): Cell {
+    // Check cache - if same coordinates in same frame, return cached result
+    if (
+      this.rayPickCache &&
+      this.rayPickCache.frameId === this.currentFrameId &&
+      this.rayPickCache.screenX === screenX &&
+      this.rayPickCache.screenY === screenY
+    ) {
+      return this.rayPickCache.result;
+    }
+
     const canvasRect = this.boundingRect();
     const canvasX = screenX - canvasRect.left;
     const canvasY = screenY - canvasRect.top;
@@ -80,6 +108,7 @@ export class TransformHandler3D implements ITransformHandler {
       this.scene,
     );
 
+    let result: Cell;
     if (worldPos) {
       // Convert 3D world coordinates to game coordinates
       // World X = Game X
@@ -87,11 +116,21 @@ export class TransformHandler3D implements ITransformHandler {
       const gameX = worldPos.x;
       const gameY = this.game.height() - 1 - worldPos.z;
 
-      return new Cell(Math.floor(gameX), Math.floor(gameY));
+      result = new Cell(Math.floor(gameX), Math.floor(gameY));
+    } else {
+      // Fallback if ray doesn't hit ground plane
+      result = new Cell(0, 0);
     }
 
-    // Fallback if ray doesn't hit ground plane
-    return new Cell(0, 0);
+    // Cache the result
+    this.rayPickCache = {
+      screenX,
+      screenY,
+      frameId: this.currentFrameId,
+      result,
+    };
+
+    return result;
   }
 
   /**
